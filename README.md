@@ -7,7 +7,8 @@ Telegram bot for receiving audio/video and preparing for lecture transcription.
 - Install [Pipenv](https://pipenv.pypa.io/)
 - Install dependencies: `pipenv install`
 - Activate environment: `pipenv shell`
-- Add your Telegram bot token to `.env`
+- Create `.env` file
+- Add your Telegram bot token to `.env` (see sample.env for reference)
 
 ## Run locally
 
