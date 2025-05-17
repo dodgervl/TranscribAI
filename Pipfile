@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+aiogram = ">=3.4"
+python-dotenv = "*"
+aiofiles = "*"
+gdown = "*"
+yadisk = "*"
+torch = "*"
+openai-whisper = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"
