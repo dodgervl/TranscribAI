@@ -11,8 +11,10 @@ gdown = "*"
 yadisk = "*"
 torch = "*"
 openai-whisper = "*"
+imageio_ffmpeg = "*"
+yandex_cloud_ml_sdk = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.11"
+python_version = "3.10"

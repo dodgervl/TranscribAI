@@ -2,6 +2,7 @@ import os
 import re
 import asyncio
 import concurrent.futures
+from dotenv import load_dotenv
 
 from aiogram import Router, F
 from aiogram.types import (
@@ -16,8 +17,19 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 from .db import insert_file, get_next_index, make_video_id, get_user_files
+#added summarization logic to the bot
+from .summarizer import full_process
 
 import whisper
+import torch
+from imageio_ffmpeg import get_ffmpeg_exe
+
+#path to video processing executable
+if 'ffmpeg' not in str(os.environ.get("PATH")):
+    FFMPEG_BINARY = get_ffmpeg_exe()
+    os.environ['PATH'] = os.environ['PATH']+';'+FFMPEG_BINARY
+
+load_dotenv('secrets.env')
 
 router = Router()
 
@@ -67,28 +79,30 @@ class UploadStates(StatesGroup):
 
 pending_files = {}
 
+def srt_time(seconds):
+    h, m = divmod(int(seconds // 60), 60)
+    s = int(seconds % 60)
+    ms = int((seconds - int(seconds)) * 1000)
+    return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
 def write_srt(segments, srt_path):
-    def srt_time(seconds):
-        h, m = divmod(int(seconds // 60), 60)
-        s = int(seconds % 60)
-        ms = int((seconds - int(seconds)) * 1000)
-        return f"{h:02}:{m:02}:{s:02},{ms:03}"
-
     with open(srt_path, "w") as f:
         for i, seg in enumerate(segments, 1):
             f.write(f"{i}\n")
-            f.write(f"{srt_time(seg['start'])} --> {srt_time(seg['end'])}\n")
+            f.write(f"{srt_time(seg['start'])} - {srt_time(seg['end'])}\n")
             f.write(seg["text"].strip() + "\n\n")
 
 
 def write_txt_with_timecodes(segments, txt_path):
     with open(txt_path, "w") as f:
         for seg in segments:
-            start = seg["start"]
-            end = seg["end"]
-            text = seg["text"].strip()
-            f.write(f"[{start:.2f} - {end:.2f}] {text}\n")
+            start = srt_time(seg["start"])
+            end = srt_time(seg["end"])
+            try:
+                text = seg["text"].strip()
+            except:
+                text = ''
+            f.write(f"[{start} --> {end}]  {text}\n")
 
 
 def save_transcripts(result, transcriptions_dir):
@@ -99,19 +113,50 @@ def save_transcripts(result, transcriptions_dir):
     write_txt_with_timecodes(result["segments"], txt_path)
     return srt_path, txt_path
 
-
+#NEW VERSION
 async def async_transcribe(file_path, transcriptions_dir, language=None):
     loop = asyncio.get_event_loop()
 
     def task():
-        model = whisper.load_model("base")
         kwargs = {}
+        mm = {6:'turbo',5:'medium',2:'small',1:'base'}#VRAM for model sizes
+
         if language:
             kwargs["language"] = language
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        if 'cuda' in device:#auto choose model size
+            tm = torch.cuda.get_device_properties().total_memory/1e9-1
+            for m in mm.keys():
+                if tm>m:
+                    model_size = mm[m]
+                    break
+        else:
+            model_size='small'#biggest suitable for CPU imho
+        model = whisper.load_model(model_size)
         result = model.transcribe(file_path, **kwargs)
         return save_transcripts(result, transcriptions_dir)
 
     return await loop.run_in_executor(None, task)
+
+
+#for testing
+# async def transcribe_api(file_path, transcriptions_dir, language=None):
+#     loop = asyncio.get_event_loop()
+
+#     def task():
+#         import assemblyai as aai
+
+#         aai.settings.api_key = os.environ.get('assemblyai')
+
+#         config = aai.TranscriptionConfig(speech_model=aai.SpeechModel.slam_1)
+
+#         transcript = aai.Transcriber(config=config).transcribe(file_path)
+
+#         subtitles = transcript.export_subtitles_srt()
+
+#         return (subtitles,subtitles)#save_transcripts(result, transcriptions_dir)
+
+#     return await loop.run_in_executor(None, task)
 
 
 @router.message(Command("help"))
@@ -124,6 +169,7 @@ async def help_handler(message: Message):
         "• The bot will process the file and send you:\n"
         "   – <b>SRT</b> subtitle file (with timecodes)\n"
         "   – <b>TXT</b> transcript (with timecodes, human-readable)\n"
+        "   – <b>Summary of the text with timecodes\n"
         "• Use /list to see your uploaded files/links and their IDs.\n\n"
         "<b>Commands:</b>\n"
         "/help — Show this help and command descriptions.\n"
@@ -312,6 +358,12 @@ async def language_selected(message: Message, state: FSMContext):
         await message.answer(
             "Transcription done! Files also saved in your folder. Use /list to see your files."
         )
+        text = open(transcriptions_dir+'\\transcript.txt','r').read()
+        summary = full_process(text)
+        await message.answer(
+            "Summarization complete, here it is:\n"+summary
+        )
+
     except Exception as ex:
         await message.answer(f"Transcription failed: {ex}")
     await state.clear()
