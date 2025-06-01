@@ -13,6 +13,7 @@ torch = "*"
 openai-whisper = "*"
 imageio_ffmpeg = "*"
 yandex_cloud_ml_sdk = "*"
+numpy = "*"
 
 [dev-packages]
 

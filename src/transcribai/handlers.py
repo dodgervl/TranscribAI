@@ -3,6 +3,8 @@ import re
 import asyncio
 import concurrent.futures
 from dotenv import load_dotenv
+from subprocess import CalledProcessError, run
+import numpy as np
 
 from aiogram import Router, F
 from aiogram.types import (
@@ -79,6 +81,26 @@ class UploadStates(StatesGroup):
 
 pending_files = {}
 
+def load_audio(file: str, sr: int = 16000):
+    cmd = [
+        FFMPEG_BINARY,
+        "-nostdin",
+        "-threads", "0",
+        "-i", file,
+        "-f", "s16le",
+        "-ac", "1",
+        "-acodec", "pcm_s16le",
+        "-ar", str(sr),
+        "-"
+    ]
+    try:
+        out = run(cmd, capture_output=True, check=True).stdout
+    except CalledProcessError as e:
+        raise RuntimeError(f"Failed to load audio: {e.stderr.decode()}") from e
+
+    return np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
+
+
 def srt_time(seconds):
     h, m = divmod(int(seconds // 60), 60)
     s = int(seconds % 60)
@@ -133,7 +155,7 @@ async def async_transcribe(file_path, transcriptions_dir, language=None):
         else:
             model_size='small'#biggest suitable for CPU imho
         model = whisper.load_model(model_size)
-        result = model.transcribe(file_path, **kwargs)
+        result = model.transcribe(load_audio(file_path), **kwargs)
         return save_transcripts(result, transcriptions_dir)
 
     return await loop.run_in_executor(None, task)
