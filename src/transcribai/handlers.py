@@ -191,7 +191,7 @@ async def help_handler(message: Message):
         "• The bot will process the file and send you:\n"
         "   – <b>SRT</b> subtitle file (with timecodes)\n"
         "   – <b>TXT</b> transcript (with timecodes, human-readable)\n"
-        "   – <b>Summary of the text with timecodes\n"
+        "   – <b>Summary</b> of the text with timecodes\n"
         "• Use /list to see your uploaded files/links and their IDs.\n\n"
         "<b>Commands:</b>\n"
         "/help — Show this help and command descriptions.\n"
