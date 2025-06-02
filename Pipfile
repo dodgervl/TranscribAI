@@ -14,6 +14,7 @@ openai-whisper = "*"
 imageio_ffmpeg = "*"
 yandex_cloud_ml_sdk = "*"
 numpy = "*"
+certifi = "*"
 
 [dev-packages]
 
