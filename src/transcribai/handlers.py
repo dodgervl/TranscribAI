@@ -19,19 +19,20 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 from .db import insert_file, get_next_index, make_video_id, get_user_files
-#added summarization logic to the bot
+
+# added summarization logic to the bot
 from .summarizer import full_process
 
 import whisper
 import torch
 from imageio_ffmpeg import get_ffmpeg_exe
 
-#path to video processing executable
-if 'ffmpeg' not in str(os.environ.get("PATH")):
+# path to video processing executable
+if "ffmpeg" not in str(os.environ.get("PATH")):
     FFMPEG_BINARY = get_ffmpeg_exe()
-    os.environ['PATH'] = os.environ['PATH']+';'+FFMPEG_BINARY
+    os.environ["PATH"] = os.environ["PATH"] + ";" + FFMPEG_BINARY
 
-load_dotenv('secrets.env')
+load_dotenv("secrets.env")
 
 router = Router()
 
@@ -43,7 +44,9 @@ os.makedirs(DATABASE_DIR, exist_ok=True)
 GOOGLE_DRIVE_LINK_RE = re.compile(
     r"(https?://)?(drive\.google\.com|docs\.google\.com)/[^\s]+"
 )
-YANDEX_DISK_LINK_RE = re.compile(r"(https?://)?(yadi\.sk|disk\.yandex\.[^/]+)/[^\s]+")
+YANDEX_DISK_LINK_RE = re.compile(
+    r"(https?://)?(yadi\.sk|disk\.(?:360\.)?yandex\.[^/]+)/[^\s]+"
+)
 MAX_BOT_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
@@ -81,17 +84,24 @@ class UploadStates(StatesGroup):
 
 pending_files = {}
 
+
 def load_audio(file: str, sr: int = 16000):
     cmd = [
         FFMPEG_BINARY,
         "-nostdin",
-        "-threads", "0",
-        "-i", file,
-        "-f", "s16le",
-        "-ac", "1",
-        "-acodec", "pcm_s16le",
-        "-ar", str(sr),
-        "-"
+        "-threads",
+        "0",
+        "-i",
+        file,
+        "-f",
+        "s16le",
+        "-ac",
+        "1",
+        "-acodec",
+        "pcm_s16le",
+        "-ar",
+        str(sr),
+        "-",
     ]
     try:
         out = run(cmd, capture_output=True, check=True).stdout
@@ -107,6 +117,7 @@ def srt_time(seconds):
     ms = int((seconds - int(seconds)) * 1000)
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
+
 def write_srt(segments, srt_path):
     with open(srt_path, "w") as f:
         for i, seg in enumerate(segments, 1):
@@ -116,14 +127,14 @@ def write_srt(segments, srt_path):
 
 
 def write_txt_with_timecodes(segments, txt_path):
-    with open(txt_path, "w",encoding='utf8') as f:
+    with open(txt_path, "w", encoding="utf8") as f:
         for seg in segments:
             start = srt_time(seg["start"])
             end = srt_time(seg["end"])
             try:
                 text = seg["text"].strip()
             except:
-                text = ''
+                text = ""
             f.write(f"[{start} --> {end}]  {text}\n")
 
 
@@ -135,25 +146,26 @@ def save_transcripts(result, transcriptions_dir):
     write_txt_with_timecodes(result["segments"], txt_path)
     return srt_path, txt_path
 
-#NEW VERSION
+
+# NEW VERSION
 async def async_transcribe(file_path, transcriptions_dir, language=None):
     loop = asyncio.get_event_loop()
 
     def task():
         kwargs = {}
-        mm = {6:'turbo',5:'medium',2:'small',1:'base'}#VRAM for model sizes
+        mm = {6: "turbo", 5: "medium", 2: "small", 1: "base"}  # VRAM for model sizes
 
         if language:
             kwargs["language"] = language
         device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        if 'cuda' in device:#auto choose model size
-            tm = torch.cuda.get_device_properties().total_memory/1e9-1
+        if "cuda" in device:  # auto choose model size
+            tm = torch.cuda.get_device_properties().total_memory / 1e9 - 1
             for m in mm.keys():
-                if tm>m:
+                if tm > m:
                     model_size = mm[m]
                     break
         else:
-            model_size='small'#biggest suitable for CPU imho
+            model_size = "small"  # biggest suitable for CPU imho
         model = whisper.load_model(model_size)
         result = model.transcribe(load_audio(file_path), **kwargs)
         return save_transcripts(result, transcriptions_dir)
@@ -161,7 +173,7 @@ async def async_transcribe(file_path, transcriptions_dir, language=None):
     return await loop.run_in_executor(None, task)
 
 
-#for testing
+# for testing
 # async def transcribe_api(file_path, transcriptions_dir, language=None):
 #     loop = asyncio.get_event_loop()
 
@@ -199,6 +211,11 @@ async def help_handler(message: Message):
         "\nSend a file or link to start!",
         parse_mode="HTML",
     )
+
+
+@router.message(F.text)
+async def echo_handler(message: Message):
+    await message.answer(message.text)
 
 
 @router.message(Command("list"))
@@ -263,14 +280,17 @@ async def handle_media(message: Message, state: FSMContext):
 
 
 def gdrive_download(link, output_dir):
-    import gdown,requests,re
+    import gdown, requests, re
+
     resp = requests.get(link)
-    #iterate on metadata to find filename and format
-    for i in resp.content.decode().split('meta property='):
-        if 'og:title' in i:
-            filename = re.findall('".*?"',i)[1].replace('"','')
+    # iterate on metadata to find filename and format
+    for i in resp.content.decode().split("meta property="):
+        if "og:title" in i:
+            filename = re.findall('".*?"', i)[1].replace('"', "")
             break
-    return gdown.download(url=link, output=os.path.join(output_dir, filename), quiet=False, fuzzy=True)
+    return gdown.download(
+        url=link, output=os.path.join(output_dir, filename), quiet=False, fuzzy=True
+    )
 
 
 def yandex_disk_download(link, output_dir):
@@ -385,11 +405,13 @@ async def language_selected(message: Message, state: FSMContext):
         await message.answer(
             "Transcription done! Files also saved in your folder. Use /list to see your files."
         )
-        text = open(transcriptions_dir+'\\transcript.txt','r',encoding='utf8').read()
-        summary = full_process(text)
-        await message.answer(
-            "Summarization complete, here it is:\n"+summary
+        transcript_path = os.path.normpath(
+            os.path.join(transcriptions_dir, "transcript.txt")
         )
+        os.makedirs(os.path.dirname(transcript_path), exist_ok=True)
+        text = open(transcript_path, "r", encoding="utf8").read()
+        summary = full_process(text)
+        await message.answer("Summarization complete, here it is:\n" + summary)
 
     except Exception as ex:
         await message.answer(f"Transcription failed: {ex}")
