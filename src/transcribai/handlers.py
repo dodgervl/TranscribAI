@@ -116,7 +116,7 @@ def write_srt(segments, srt_path):
 
 
 def write_txt_with_timecodes(segments, txt_path):
-    with open(txt_path, "w") as f:
+    with open(txt_path, "w",encoding='utf8') as f:
         for seg in segments:
             start = srt_time(seg["start"])
             end = srt_time(seg["end"])
@@ -263,9 +263,14 @@ async def handle_media(message: Message, state: FSMContext):
 
 
 def gdrive_download(link, output_dir):
-    import gdown
-
-    return gdown.download(url=link, output=output_dir, quiet=False, fuzzy=True)
+    import gdown,requests,re
+    resp = requests.get(link)
+    #iterate on metadata to find filename and format
+    for i in resp.content.decode().split('meta property='):
+        if 'og:title' in i:
+            filename = re.findall('".*?"',i)[1].replace('"','')
+            break
+    return gdown.download(url=link, output=os.path.join(output_dir, filename), quiet=False, fuzzy=True)
 
 
 def yandex_disk_download(link, output_dir):
