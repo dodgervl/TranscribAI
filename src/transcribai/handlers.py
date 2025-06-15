@@ -173,26 +173,6 @@ async def async_transcribe(file_path, transcriptions_dir, language=None):
     return await loop.run_in_executor(None, task)
 
 
-# for testing
-# async def transcribe_api(file_path, transcriptions_dir, language=None):
-#     loop = asyncio.get_event_loop()
-
-#     def task():
-#         import assemblyai as aai
-
-#         aai.settings.api_key = os.environ.get('assemblyai')
-
-#         config = aai.TranscriptionConfig(speech_model=aai.SpeechModel.slam_1)
-
-#         transcript = aai.Transcriber(config=config).transcribe(file_path)
-
-#         subtitles = transcript.export_subtitles_srt()
-
-#         return (subtitles,subtitles)#save_transcripts(result, transcriptions_dir)
-
-#     return await loop.run_in_executor(None, task)
-
-
 @router.message(Command("help"))
 async def help_handler(message: Message):
     await message.answer(
