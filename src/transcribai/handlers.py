@@ -385,7 +385,7 @@ async def language_selected(message: Message, state: FSMContext):
         await message.answer(
             "Transcription done! Files also saved in your folder. Use /list to see your files."
         )
-        text = open(transcriptions_dir+'\\transcript.txt','r').read()
+        text = open(transcriptions_dir+'\\transcript.txt','r',encoding='utf8').read()
         summary = full_process(text)
         await message.answer(
             "Summarization complete, here it is:\n"+summary
